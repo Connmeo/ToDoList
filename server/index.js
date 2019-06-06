@@ -1,81 +1,103 @@
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
+const uuid = require('uuidv4');
 
-const PORT = 3006;
+const {
+  PORT,
+  PATH_TO_DB,
+  GET_USER_FAILURE,
+  ADD_USER_FAILURE,
+  UPDATE_USER_FAILURE
+} = require('./Constants');
+const { getDataFromFile, writeDataToFile } = require('./Utils');
 
 const app = express();
 
 app.use(express.json());
 
-app.get('/users/:id', (req, res) => {
-  const userId = req.params.id;
-  const userData = req.body;
+app.get('/users', (req, res) => {
+  try {
+    const users = getDataFromFile(PATH_TO_DB(), 'users');
 
-  const data = fs.readFileSync(path.join(__dirname, 'data.json'));
-
-  const users = JSON.parse(data).users;
-
-  const isExist = users[userId];
-
-  if (isExist) {
-    res.json(users[userId]);
+    res.json(users);
     res.status(200);
-  } else {
-    res.send('User does not exist.');
-    res.status(404);
+  } catch (error) {
+    res.send(error);
+    res.status(400);
+  }
+});
+
+app.get('/users/:id', (req, res) => {
+  try {
+    const userId = req.params.id;
+    const users = getDataFromFile(PATH_TO_DB(), 'users');
+    const isUserExist = !!users[userId];
+
+    if (isUserExist) {
+      res.json(users[userId]);
+      res.status(200);
+    } else {
+      res.send(GET_USER_FAILURE(userId));
+      res.status(404);
+    }
+  } catch (error) {
+    res.send(error);
+    res.status(400);
   }
 });
 
 app.post('/users', (req, res) => {
-  const userData = req.body;
+  try {
+    const userData = req.body;
+    const data = getDataFromFile(PATH_TO_DB());
+    const updatedUsers = data.users;
+    const id = uuid();
+    const updatedUser = { ...userData, id, todos: [] };
 
-  const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'data.json')));
+    updatedUsers[id] = updatedUser;
 
-  const users = data.users;
+    const updatedData = { ...data, users: updatedUsers };
 
-  const updatedUsers = { ...users };
+    const isDataSaved = writeDataToFile(PATH_TO_DB(), updatedData);
 
-  const updatedUser = { ...userData, todos: [] };
-
-  updatedUsers[userData.id] = updatedUser;
-
-  const updatedData = { ...data, users: updatedUsers };
-
-  fs.writeFileSync(
-    path.join(__dirname, 'data.json'),
-    JSON.stringify(updatedData, null, 2),
-    'utf-8'
-  );
-
-  res.json(userData);
-  res.status(200);
+    if (isDataSaved) {
+      res.json(updatedUsers);
+      res.status(200);
+    } else {
+      res.json(ADD_USER_FAILURE());
+      res.status(400);
+    }
+  } catch (error) {
+    res.send(error);
+    res.status(400);
+  }
 });
 
 app.put('/users/:id', (req, res) => {
-  const userId = req.params.id;
-  const updatedUserTodos = req.body;
+  try {
+    const userId = req.params.id;
+    const updatedUserTodos = req.body;
+    const data = getDataFromFile(PATH_TO_DB());
+    const updatedUsers = data.users;
 
-  const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'data.json')));
+    updatedUsers[userId] = { ...updatedUsers[userId], todos: updatedUserTodos };
 
-  const users = data.users;
+    const updatedData = { ...data, users: updatedUsers };
 
-  const updatedUsers = { ...users };
+    const isDataSaved = writeDataToFile(PATH_TO_DB(), updatedData);
 
-  updatedUsers[userId] = { ...updatedUsers[userId], todos: updatedUserTodos };
-
-  const updatedData = { ...data, users: updatedUsers };
-
-  fs.writeFileSync(
-    path.join(__dirname, 'data.json'),
-    JSON.stringify(updatedData, null, 2),
-    'utf-8'
-  );
-
-  res.send('Todos of user were updated.');
-  res.status(200);
+    if (isDataSaved) {
+      res.send(updatedData);
+      res.status(200);
+    } else {
+      res.send(UPDATE_USER_FAILURE(userId));
+      res.status(400);
+    }
+  } catch (error) {
+    res.send(error);
+    res.status(400);
+  }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is started at ${PORT} port.`);
+app.listen(PORT(), () => {
+  console.log(`Server is started at ${PORT()} port.`);
 });
